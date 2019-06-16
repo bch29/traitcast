@@ -1,6 +1,6 @@
 /*!
 
-#' Casting from `Any`
+## Casting from `Any`
 
 In the standard library, the std::any::Any trait comes with downcast methods 
 which let you cast from an `Any` trait object to a concrete type.
