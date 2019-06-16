@@ -1,11 +1,11 @@
 [package]
 name = "traitcast"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Bradley Hardy <bradleyhardy29@gmail.com>"]
 edition = "2018"
 license = "MIT"
 description = "Downcast from Any to trait objects"
-repository = "https://github.com/bhc29/traitcast"
+repository = "https://github.com/bch29/traitcast"
 
 [dependencies]
 inventory = "0.1.*"
