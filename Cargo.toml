@@ -1,0 +1,10 @@
+[package]
+name = "traitcast"
+version = "0.1.0"
+authors = ["Bradley Hardy <bradleyhardy29@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+inventory = "0.1.*"
+lazy_static = "1.*"
+anymap = "0.12.*"
