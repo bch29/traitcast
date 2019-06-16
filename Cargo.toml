@@ -1,9 +1,9 @@
 [package]
 name = "traitcast"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Bradley Hardy <bradleyhardy29@gmail.com>"]
 edition = "2018"
-license-file = "LICENSE"
+license = "MIT"
 description = "Downcast from Any to trait objects"
 repository = "https://github.com/bhc29/traitcast"
 
