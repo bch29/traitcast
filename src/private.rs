@@ -37,13 +37,6 @@ pub struct ImplEntry<DynTrait : ?Sized> {
     pub tid: TypeId
 }
 
-/// ImplEntry must be wrapped in each invocation of register_trait! in order
-/// to avoid declaring orphan instances of inventory::Collect for ImplEntry.
-/// This trait is implemented by those wrappers.
-pub unsafe trait ImplEntryWrapper<DynTrait : ?Sized> {
-    fn wrap(entry: ImplEntry<DynTrait>) -> Self;
-}
-
 /// This is instantiated once for each castable trait. It describes how a trait
 /// can insert itself into the global table.
 pub struct TraitEntryBuilder {
