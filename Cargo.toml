@@ -4,7 +4,7 @@ version = "0.2.0"
 authors = ["Bradley Hardy <bradleyhardy29@gmail.com>"]
 edition = "2018"
 license = "MIT"
-description = "Downcast from Any to trait objects"
+description = "Cast between dynamic trait objects."
 repository = "https://github.com/bch29/traitcast"
 
 [dependencies]
