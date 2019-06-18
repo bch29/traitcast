@@ -19,7 +19,7 @@ mod traits {
 mod structs {
     use crate::traitcast;
 
-    use crate::tests::traits::{Bar, Baz, Foo};
+    use crate::tests::traits::{self, Bar, Foo};
     pub struct A {
         pub x: i64,
     }
@@ -48,14 +48,14 @@ mod structs {
         }
     }
 
-    impl Baz for B {
+    impl traits::Baz for B {
         fn baz(self: Box<Self>) -> i64 {
             self.y
         }
     }
 
     traitcast!(struct A: Foo, Bar);
-    traitcast!(struct B: Foo, Baz);
+    traitcast!(struct B: Foo, traits::Baz);
 }
 
 use structs::*;

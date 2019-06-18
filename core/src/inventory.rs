@@ -81,13 +81,13 @@ macro_rules! traitcast {
     (struct $type:ty) => {
         $crate::traitcast!($type => $type);
     };
-    (struct $type:ty : $($trait:ident),+) => {
+    (struct $type:ty : $($trait:path),+) => {
         $crate::traitcast!(struct $type);
         $(
-            $crate::traitcast!(impl $trait for $type);
+            $crate::traitcast!(impl $trait; for $type);
         )+
     };
-    (impl $trait:ident for $source:ty) => {
+    (impl $trait:path; for $source:ty) => {
         $crate::traitcast!($source => dyn $trait);
     };
     ($source:ty => $target:ty) => {
