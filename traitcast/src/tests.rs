@@ -3,6 +3,8 @@
 use std::any::Any;
 
 mod traits {
+    use crate::traitcast;
+
     pub trait Foo: crate::TraitcastFrom {
         fn foo(&mut self) -> i64;
     }
@@ -15,12 +17,14 @@ mod traits {
         fn baz(self: Box<Self>) -> i64;
     }
 
-    crate::traitcast_to_trait!(Foo, Foo_Traitcast);
-    crate::traitcast_to_trait!(Bar, Bar_Traitcast);
-    crate::traitcast_to_trait!(Baz, Baz_Traitcast);
+    traitcast!(pub trait Foo, Foo_Traitcast);
+    traitcast!(pub trait Bar, Bar_Traitcast);
+    traitcast!(pub trait Baz, Baz_Traitcast);
 }
 
 mod structs {
+    use crate::traitcast;
+
     use crate::tests::traits::{Bar, Baz, Foo};
     pub struct A {
         pub x: i64,
@@ -56,10 +60,8 @@ mod structs {
         }
     }
 
-    crate::traitcast_to_impl!(Foo, A);
-    crate::traitcast_to_impl!(Bar, A);
-    crate::traitcast_to_impl!(Foo, B);
-    crate::traitcast_to_impl!(Baz, B);
+    traitcast!(pub struct A, A_Traitcast: Foo, Bar);
+    traitcast!(pub struct B, B_Traitcast: Foo, Baz);
 }
 
 use structs::*;
@@ -112,6 +114,12 @@ fn test_traitcast() {
         {
             let y: &mut dyn Foo = (*y).cast_mut().unwrap();
             assert_eq!(y.foo(), 8);
+        }
+
+        {
+            // Can cast back up to the original type
+            let y: &mut B = (*y).cast_mut().unwrap();
+            assert_eq!(y.y, 8);
         }
 
         assert_eq!(y.baz(), 8);

@@ -54,15 +54,15 @@ trait Foo: TraitcastFrom {
     fn foo(&self) -> i32;
 }
 
-// Invoking `traitcast_to_trait!` implements TraitcastTo for this Foo, allowing
+// Invoking `traitcast!` implements TraitcastTo for this Foo, allowing
 // other trait objects to be cast into Foo trait objects.
-traitcast::traitcast_to_trait!(Foo, Foo_Traitcast);
+traitcast::traitcast!(trait Foo, Foo_Traitcast);
 
 trait Bar: TraitcastFrom {
     fn bar(&mut self) -> i32;
 }
 
-traitcast::traitcast_to_trait!(Bar, Bar_Traitcast);
+traitcast::traitcast!(trait Bar, Bar_Traitcast);
 
 struct A {
     x: i32
@@ -86,8 +86,7 @@ impl Bar for A {
 // Register the traits.
 
 // For each struct that implements each trait, register the implementation.
-traitcast::traitcast_to_impl!(Foo, A);
-traitcast::traitcast_to_impl!(Bar, A);
+traitcast::traitcast!(struct A, A_Wrapper: Foo, Bar);
 
 fn main() {
     let mut x = A { x: 7 };
@@ -135,16 +134,8 @@ pub mod tests;
 
 use std::any::Any;
 
-/// Macro implementation details. If you want to use these directly, it is best
-/// to use the `traitcast_core` crate instead.
-pub mod private {
-    pub use traitcast_core::{CastIntoTrait, ImplEntry, TraitcastFrom};
-
-    pub use traitcast_core::inventory::TraitBuilder;
-}
-
-use crate::private::ImplEntry;
-pub use crate::private::TraitcastFrom;
+use traitcast_core::ImplEntry;
+pub use traitcast_core::TraitcastFrom;
 use traitcast_core::inventory::build_registry;
 use traitcast_core::Registry;
 
@@ -178,7 +169,7 @@ where
     /// Tries to cast self to a different dynamic trait object. This will
     /// always return None if the implementation of the target trait, for the
     /// concrete type of self, has not been registered via
-    /// `traitcast_to_impl!`.
+    /// `traitcast!`.
     fn cast_ref(&self) -> Option<&To> {
         cast_ref(self)
     }
@@ -186,14 +177,14 @@ where
     /// Tries to cast the self to a different dynamic trait object.  This will
     /// always return None if the implementation of the target trait, for the
     /// concrete type of self, has not been registered via
-    /// `traitcast_to_impl!`.
+    /// `traitcast!`.
     fn cast_mut(&mut self) -> Option<&mut To> {
         cast_mut(self)
     }
 
     /// Tries to cast self to a boxed dynamic trait object. This will always
     /// return Err if the implementation of the target trait, for the concrete
-    /// type of self, has not been registered via `traitcast_to_impl!`.
+    /// type of self, has not been registered via `traitcast!`.
     fn cast_box(self: Box<Self>) -> Result<Box<To>, Box<dyn Any>> {
         cast_box(self)
     }
@@ -201,7 +192,7 @@ where
 
 /// Tests whether the given value is castable to some trait object. This will
 /// always return `false` if the implementation of the target trait, for the
-/// concrete type of x, has not been registered via `traitcast_to_impl!`.
+/// concrete type of x, has not been registered via `traitcast!`.
 pub fn implements_trait<From, To>(x: &From) -> bool
 where
     From: TraitcastFrom + ?Sized,
@@ -212,7 +203,7 @@ where
 
 /// Tries to cast the given pointer to a dynamic trait object. This will always
 /// return Err if the implementation of the target trait, for the concrete type
-/// of x, has not been registered via `traitcast_to_impl!`.
+/// of x, has not been registered via `traitcast!`.
 pub fn cast_box<From, To>(x: Box<From>) -> Result<Box<To>, Box<dyn Any>>
 where
     From: TraitcastFrom + ?Sized,
@@ -226,7 +217,7 @@ where
 
 /// Tries to cast the given mutable reference to a dynamic trait object. This
 /// will always return None if the implementation of the target trait, for the
-/// concrete type of x, has not been registered via `traitcast_to_impl!`.
+/// concrete type of x, has not been registered via `traitcast!`.
 pub fn cast_mut<'a, From, To>(x: &'a mut From) -> Option<&'a mut To>
 where
     From: TraitcastFrom + ?Sized,
@@ -240,7 +231,7 @@ where
 
 /// Tries to cast the given reference to a dynamic trait object. This will
 /// always return None if the implementation of the target trait, for the
-/// concrete type of x, has not been registered via `traitcast_to_impl!`.
+/// concrete type of x, has not been registered via `traitcast!`.
 pub fn cast_ref<'a, From, To>(x: &'a From) -> Option<&'a To>
 where
     From: TraitcastFrom + ?Sized,
@@ -253,51 +244,65 @@ where
 }
 
 /// Trait objects that can be cast into implement this trait. Implementations
-/// are via the macro `traitcast_to_trait!`.
+/// are via the macro `traitcast!`.
 pub trait TraitcastTo {
     type ImplEntryWrapper: From<ImplEntry<Self>>
         + AsRef<ImplEntry<Self>>
         + ::inventory::Collect;
 }
 
-/// Register a trait to allow it to be cast into. Cannot cast from implementing
-/// structs unless `traitcast_to_impl!` is also invoked for that struct.
+/// `traitcast!(pub trait Foo, Foo_Traitcast)` registers a trait to allow it to 
+/// be cast into. If the trait is private, omit `pub`.
 ///
-/// This macro may only be used on traits defined in the same module.
+/// `traitcast!(pub struct Bar, Bar_Traitcast)` registers a struct to allow it 
+/// to be cast into. If the struct is private, omit `pub`.
+///
+/// `traitcast!(impl Foo for Bar)` allows casting into dynamic `Foo` trait 
+/// objects, whose concrete type is `Bar`.
+///
+/// `traitcast!(pub struct Bar, Bar_Traitcast: Foo1, Foo2)` registers a struct 
+/// to allow it to be cast into, and further allows casting into dynamic `Foo1`
+/// or `Foo2` trait objects, whose concrete type is `Bar`. If the struct is
+/// private, omit `pub`.
 #[macro_export]
-macro_rules! traitcast_to_trait {
-    ($trait:ident, $wrapper:ident) => {
-        traitcast_core::defn_impl_entry_wrapper!($trait, $wrapper);
+macro_rules! traitcast {
+    ($vis:vis trait $trait:ident, $wrapper:ident) => {
+        $crate::traitcast!(wrap dyn $trait, $vis $wrapper);
+    };
+    ($vis:vis struct $type:ty, $wrapper:ident) => {
+        $crate::traitcast!(wrap $type, $vis $wrapper);
+        $crate::traitcast!($type => $type);
+    };
+    ($vis:vis struct $type:ty, $wrapper:ident: $($trait:ident),+) => {
+        $crate::traitcast!($vis struct $type, $wrapper);
+
+        $(
+            $crate::traitcast!(impl $trait for $type);
+        )+
+    };
+    ($source:ty => $target:ty) => {
+        inventory::submit! {
+            type Wrapper = <$target as $crate::TraitcastTo>
+                ::ImplEntryWrapper;
+            Wrapper::from(traitcast_core::impl_entry!($target, $source))
+        }
+    };
+    (impl $trait:ident for $source:ty) => {
+        $crate::traitcast!($source => dyn $trait);
+    };
+    (wrap $type:ty, $vis:vis $wrapper:ident) => {
+        traitcast_core::defn_impl_entry_wrapper!($type, $vis $wrapper);
         inventory::collect!($wrapper);
 
-        impl $crate::TraitcastTo for dyn $trait {
+        impl $crate::TraitcastTo for $type {
             type ImplEntryWrapper = $wrapper;
         }
 
         inventory::submit! {
-            use $crate::private::TraitBuilder;
-            type Wrapper = <dyn $trait as $crate::TraitcastTo>
+            use traitcast_core::inventory::TraitBuilder;
+            type Wrapper = <$type as $crate::TraitcastTo>
                 ::ImplEntryWrapper;
-            TraitBuilder::collecting_entries::<dyn $trait, Wrapper>()
-        }
-    };
-}
-
-/// Register an implementation of a castable trait for a particular struct. The
-/// struct must implement the trait. This enables objects of this type to be
-/// cast into dynamic trait references of this trait, via an Any pointer.
-/// It is best not to invoke traitcast_to_impl! multiple times for the same
-/// implementation. This will have no effect but to slightly slow down program
-/// load time.
-///
-/// This macro should only be used on structs defined in the same module.
-#[macro_export]
-macro_rules! traitcast_to_impl {
-    ($trait:ident, $struct:ident) => {
-        inventory::submit! {
-            type Wrapper = <dyn $trait as $crate::TraitcastTo>
-                ::ImplEntryWrapper;
-            Wrapper::from(traitcast_core::impl_entry!($trait, $struct))
+            TraitBuilder::collecting_entries::<$type, Wrapper>()
         }
     };
 }

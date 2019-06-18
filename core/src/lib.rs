@@ -135,6 +135,8 @@ pub struct ImplEntry<DynTrait: ?Sized> {
     pub cast_mut: fn(&mut dyn Any) -> Option<&mut DynTrait>,
     pub cast_ref: fn(&dyn Any) -> Option<&DynTrait>,
     pub tid: TypeId,
+    pub from_name: &'static str,
+    pub into_name: &'static str
 }
 
 /// Manual `Clone` impl to allow for unsized T.
@@ -145,6 +147,8 @@ impl<T: ?Sized> Clone for ImplEntry<T> {
             cast_mut: self.cast_mut,
             cast_ref: self.cast_ref,
             tid: self.tid,
+            from_name: self.from_name,
+            into_name: self.into_name
         }
     }
 }
@@ -209,28 +213,30 @@ impl TraitcastFrom for dyn Any {
 /// # use traitcast_core::impl_entry;
 /// # use traitcast_core::ImplEntry;
 /// use std::fmt::Display;
-/// let x: ImplEntry<Display> = impl_entry!(Display, i32);
+/// let x: ImplEntry<Display> = impl_entry!(dyn Display, i32);
 /// ```
 #[macro_export]
 macro_rules! impl_entry {
-    ($trait:ident, $struct:ident) => {
-        $crate::ImplEntry::<dyn $trait> {
+    ($source:ty, $target:ty) => {
+        $crate::ImplEntry::<$source> {
             cast_box: |x| {
-                let x: Box<$struct> = x.downcast()?;
-                let x: Box<dyn $trait> = x;
+                let x: Box<$target> = x.downcast()?;
+                let x: Box<$source> = x;
                 Ok(x)
             },
             cast_mut: |x| {
-                let x: &mut $struct = x.downcast_mut()?;
-                let x: &mut dyn $trait = x;
+                let x: &mut $target = x.downcast_mut()?;
+                let x: &mut $source = x;
                 Some(x)
             },
             cast_ref: |x| {
-                let x: &$struct = x.downcast_ref()?;
-                let x: &dyn $trait = x;
+                let x: &$target = x.downcast_ref()?;
+                let x: &$source = x;
                 Some(x)
             },
-            tid: std::any::TypeId::of::<$struct>(),
+            tid: std::any::TypeId::of::<$target>(),
+            from_name: stringify!($source),
+            into_name: stringify!($target)
         }
     };
 }
@@ -241,18 +247,18 @@ macro_rules! impl_entry {
 /// implementation detail of `traitcast_to_trait!`.
 #[macro_export]
 macro_rules! defn_impl_entry_wrapper {
-    ($trait:ident, $wrapper:ident) => {
+    ($type:ty, $vis:vis $wrapper:ident) => {
         #[allow(non_camel_case_types)]
-        pub struct $wrapper(pub $crate::ImplEntry<dyn $trait>);
+        $vis struct $wrapper(pub $crate::ImplEntry<$type>);
 
-        impl std::convert::From<$crate::ImplEntry<dyn $trait>> for $wrapper {
-            fn from(x: $crate::ImplEntry<dyn $trait>) -> Self {
+        impl std::convert::From<$crate::ImplEntry<$type>> for $wrapper {
+            fn from(x: $crate::ImplEntry<$type>) -> Self {
                 $wrapper(x)
             }
         }
 
-        impl std::convert::AsRef<$crate::ImplEntry<dyn $trait>> for $wrapper {
-            fn as_ref(&self) -> &$crate::ImplEntry<dyn $trait> {
+        impl std::convert::AsRef<$crate::ImplEntry<$type>> for $wrapper {
+            fn as_ref(&self) -> &$crate::ImplEntry<$type> {
                 &self.0
             }
         }
