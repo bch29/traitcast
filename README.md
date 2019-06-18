@@ -3,7 +3,7 @@ Traitcast
 
 ## Casting from `Any`
 
-In the standard library, the std::any::Any trait comes with downcast methods 
+In the standard library, the std::any::Any trait comes with downcast methods
 which let you cast from an `Any` trait object to a concrete type.
 
 ```rust
@@ -46,35 +46,29 @@ let z: Option<&dyn Foo> = y.downcast_ref();
 This library provides a way of casting between different trait objects.
 
 ```rust
-use traitcast::{TraitcastFrom, TraitcastTo, Traitcast};
+use traitcast::{TraitcastFrom, Traitcast};
 
-// Extending `TraitcastFrom` is optional. This allows `Foo` objects themselves 
-// to be cast to other trait objects. If you do not extend `TraitcastFrom`, 
+// Extending `TraitcastFrom` is optional. This allows `Foo` objects themselves
+// to be cast to other trait objects. If you do not extend `TraitcastFrom`,
 // then Foo may only be cast into, not out of.
 trait Foo: TraitcastFrom {
-    fn foo(&self) -> i32; 
+    fn foo(&self) -> i32;
 }
-
-// Invoking `traitcast_to_trait!` implements TraitcastTo for this Foo, allowing 
-// other trait objects to be cast into Foo trait objects.
-traitcast::traitcast_to_trait!(Foo, Foo_Traitcast);
 
 trait Bar: TraitcastFrom {
     fn bar(&mut self) -> i32;
 }
 
-traitcast::traitcast_to_trait!(Bar, Bar_Traitcast);
-
 struct A {
-    x: i32 
+    x: i32
 }
 
-// No implementation of TraitcastFrom is necessary, because it is covered by 
+// No implementation of TraitcastFrom is necessary, because it is covered by
 // the blanket impl for any sized type with a static lifetime.
 impl Foo for A {
     fn foo(&self) -> i32 {
-        self.x 
-    } 
+        self.x
+    }
 }
 
 impl Bar for A {
@@ -87,8 +81,7 @@ impl Bar for A {
 // Register the traits.
 
 // For each struct that implements each trait, register the implementation.
-traitcast::traitcast_to_impl!(Foo, A);
-traitcast::traitcast_to_impl!(Bar, A);
+traitcast::traitcast!(struct A: Foo, Bar);
 
 fn main() {
     let mut x = A { x: 7 };
@@ -101,8 +94,8 @@ fn main() {
 
     {
         let x: &dyn Bar = &x;
-        // Cast an immutable reference using the `cast_ref` method (via the 
-        // `Traitcast` trait, which is blanket implemented for all pairs of 
+        // Cast an immutable reference using the `cast_ref` method (via the
+        // `Traitcast` trait, which is blanket implemented for all pairs of
         // traits that may be cast between).
         let x: &dyn Foo = x.cast_ref().unwrap();
         assert_eq!(x.foo(), 7);
@@ -114,7 +107,7 @@ fn main() {
 
     {
         let x: &mut dyn Foo = &mut x;
-        // Cast a mutable reference using the `cast_mut` method 
+        // Cast a mutable reference using the `cast_mut` method
         let x: &mut dyn Bar = x.cast_mut().unwrap();
         assert_eq!(x.bar(), 14);
     }
@@ -127,3 +120,5 @@ fn main() {
         assert_eq!(z.foo(), 14);
     }
 }
+```
+

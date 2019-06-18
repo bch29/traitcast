@@ -16,7 +16,7 @@ use std::collections::HashMap;
 
 /// A registry defining how to cast into some set of traits.
 pub struct Registry {
-    tables: anymap::Map<dyn anymap::any::Any + Sync>,
+    pub tables: anymap::Map<dyn anymap::any::Any + Sync>,
 }
 
 impl Registry {
@@ -62,7 +62,13 @@ impl Registry {
 /// Provides methods for casting into the target trait object from other trait
 /// objects.
 pub struct CastIntoTrait<DynTrait: ?Sized> {
-    map: HashMap<TypeId, ImplEntry<DynTrait>>,
+    pub map: HashMap<TypeId, ImplEntry<DynTrait>>,
+}
+
+impl<DynTrait: ?Sized> CastIntoTrait<DynTrait> {
+    pub fn new() -> Self {
+        CastIntoTrait { map: HashMap::new() }
+    }
 }
 
 impl<DynTrait: ?Sized> std::iter::FromIterator<ImplEntry<DynTrait>>

@@ -3,8 +3,6 @@
 use std::any::Any;
 
 mod traits {
-    use crate::traitcast;
-
     pub trait Foo: crate::TraitcastFrom {
         fn foo(&mut self) -> i64;
     }
@@ -16,10 +14,6 @@ mod traits {
     pub trait Baz: crate::TraitcastFrom {
         fn baz(self: Box<Self>) -> i64;
     }
-
-    traitcast!(pub trait Foo, Foo_Traitcast);
-    traitcast!(pub trait Bar, Bar_Traitcast);
-    traitcast!(pub trait Baz, Baz_Traitcast);
 }
 
 mod structs {
@@ -60,8 +54,8 @@ mod structs {
         }
     }
 
-    traitcast!(pub struct A, A_Traitcast: Foo, Bar);
-    traitcast!(pub struct B, B_Traitcast: Foo, Baz);
+    traitcast!(struct A: Foo, Bar);
+    traitcast!(struct B: Foo, Baz);
 }
 
 use structs::*;

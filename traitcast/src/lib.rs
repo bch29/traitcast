@@ -45,7 +45,7 @@ let z: Option<&dyn Foo> = y.downcast_ref();
 This library provides a way of casting between different trait objects.
 
 ```rust
-use traitcast::{TraitcastFrom, TraitcastTo, Traitcast};
+use traitcast::{TraitcastFrom, Traitcast};
 
 // Extending `TraitcastFrom` is optional. This allows `Foo` objects themselves
 // to be cast to other trait objects. If you do not extend `TraitcastFrom`,
@@ -54,15 +54,9 @@ trait Foo: TraitcastFrom {
     fn foo(&self) -> i32;
 }
 
-// Invoking `traitcast!` implements TraitcastTo for this Foo, allowing
-// other trait objects to be cast into Foo trait objects.
-traitcast::traitcast!(trait Foo, Foo_Traitcast);
-
 trait Bar: TraitcastFrom {
     fn bar(&mut self) -> i32;
 }
-
-traitcast::traitcast!(trait Bar, Bar_Traitcast);
 
 struct A {
     x: i32
@@ -86,7 +80,7 @@ impl Bar for A {
 // Register the traits.
 
 // For each struct that implements each trait, register the implementation.
-traitcast::traitcast!(struct A, A_Wrapper: Foo, Bar);
+traitcast::traitcast!(struct A: Foo, Bar);
 
 fn main() {
     let mut x = A { x: 7 };
@@ -134,22 +128,21 @@ pub mod tests;
 
 use std::any::Any;
 
-use traitcast_core::ImplEntry;
 pub use traitcast_core::TraitcastFrom;
 use traitcast_core::inventory::build_registry;
 use traitcast_core::Registry;
 
 lazy_static::lazy_static! {
     /// This is a global table of all the trait objects that can be cast into.
-    /// Each entry is a CastIntoTrait, i.e. a table of the implementations of
-    /// a castable trait.
+    /// Each entry is a CastIntoTrait, i.e. a table of the implementations of a
+    /// castable trait.
     static ref GLOBAL_REGISTRY: Registry =
         build_registry();
 }
 
 /// A convenience trait with a blanket implementation that adds methods to cast
-/// from any trait that implements TraitcastFrom, to any trait that implements
-/// TraitcastTo.
+/// from any trait that implements TraitcastFrom, to target with a static
+/// lifetime.
 pub trait Traitcast<To: ?Sized> {
     /// A convenience method that wraps the top-level `cast_ref` function.
     fn cast_ref(&self) -> Option<&To>;
@@ -164,7 +157,7 @@ pub trait Traitcast<To: ?Sized> {
 impl<From, To> Traitcast<To> for From
 where
     From: TraitcastFrom + ?Sized,
-    To: TraitcastTo + ?Sized + 'static,
+    To: ?Sized + 'static,
 {
     /// Tries to cast self to a different dynamic trait object. This will
     /// always return None if the implementation of the target trait, for the
@@ -196,7 +189,7 @@ where
 pub fn implements_trait<From, To>(x: &From) -> bool
 where
     From: TraitcastFrom + ?Sized,
-    To: TraitcastTo + ?Sized + 'static,
+    To: ?Sized + 'static,
 {
     cast_ref::<From, To>(x).is_some()
 }
@@ -207,7 +200,7 @@ where
 pub fn cast_box<From, To>(x: Box<From>) -> Result<Box<To>, Box<dyn Any>>
 where
     From: TraitcastFrom + ?Sized,
-    To: TraitcastTo + ?Sized + 'static,
+    To: ?Sized + 'static,
 {
     GLOBAL_REGISTRY
         .cast_into::<To>()
@@ -221,7 +214,7 @@ where
 pub fn cast_mut<'a, From, To>(x: &'a mut From) -> Option<&'a mut To>
 where
     From: TraitcastFrom + ?Sized,
-    To: TraitcastTo + ?Sized + 'static,
+    To: ?Sized + 'static,
 {
     GLOBAL_REGISTRY
         .cast_into::<To>()
@@ -235,7 +228,7 @@ where
 pub fn cast_ref<'a, From, To>(x: &'a From) -> Option<&'a To>
 where
     From: TraitcastFrom + ?Sized,
-    To: TraitcastTo + ?Sized + 'static,
+    To: ?Sized + 'static,
 {
     GLOBAL_REGISTRY
         .cast_into::<To>()
@@ -243,66 +236,32 @@ where
         .from_ref(x)
 }
 
-/// Trait objects that can be cast into implement this trait. Implementations
-/// are via the macro `traitcast!`.
-pub trait TraitcastTo {
-    type ImplEntryWrapper: From<ImplEntry<Self>>
-        + AsRef<ImplEntry<Self>>
-        + ::inventory::Collect;
-}
-
-/// `traitcast!(pub trait Foo, Foo_Traitcast)` registers a trait to allow it to 
-/// be cast into. If the trait is private, omit `pub`.
-///
-/// `traitcast!(pub struct Bar, Bar_Traitcast)` registers a struct to allow it 
-/// to be cast into. If the struct is private, omit `pub`.
+/// `traitcast!(struct Bar)` registers a struct to allow it to be cast into.
 ///
 /// `traitcast!(impl Foo for Bar)` allows casting into dynamic `Foo` trait 
-/// objects, whose concrete type is `Bar`.
+/// objects, from objects whose concrete type is `Bar`.
 ///
-/// `traitcast!(pub struct Bar, Bar_Traitcast: Foo1, Foo2)` registers a struct 
-/// to allow it to be cast into, and further allows casting into dynamic `Foo1`
-/// or `Foo2` trait objects, whose concrete type is `Bar`. If the struct is
-/// private, omit `pub`.
+/// `traitcast!(struct Bar: Foo1, Foo2)` registers a struct to allow it to be 
+/// cast into, and further allows casting into dynamic `Foo1` or `Foo2` trait
+/// objects, from objects whose concrete type is `Bar`.
 #[macro_export]
 macro_rules! traitcast {
-    ($vis:vis trait $trait:ident, $wrapper:ident) => {
-        $crate::traitcast!(wrap dyn $trait, $vis $wrapper);
-    };
-    ($vis:vis struct $type:ty, $wrapper:ident) => {
-        $crate::traitcast!(wrap $type, $vis $wrapper);
+    (struct $type:ty) => {
         $crate::traitcast!($type => $type);
     };
-    ($vis:vis struct $type:ty, $wrapper:ident: $($trait:ident),+) => {
-        $crate::traitcast!($vis struct $type, $wrapper);
-
+    (struct $type:ty : $($trait:ident),+) => {
+        $crate::traitcast!(struct $type);
         $(
             $crate::traitcast!(impl $trait for $type);
         )+
     };
-    ($source:ty => $target:ty) => {
-        inventory::submit! {
-            type Wrapper = <$target as $crate::TraitcastTo>
-                ::ImplEntryWrapper;
-            Wrapper::from(traitcast_core::impl_entry!($target, $source))
-        }
-    };
     (impl $trait:ident for $source:ty) => {
         $crate::traitcast!($source => dyn $trait);
     };
-    (wrap $type:ty, $vis:vis $wrapper:ident) => {
-        traitcast_core::defn_impl_entry_wrapper!($type, $vis $wrapper);
-        inventory::collect!($wrapper);
-
-        impl $crate::TraitcastTo for $type {
-            type ImplEntryWrapper = $wrapper;
-        }
-
+    ($source:ty => $target:ty) => {
         inventory::submit! {
-            use traitcast_core::inventory::TraitBuilder;
-            type Wrapper = <$type as $crate::TraitcastTo>
-                ::ImplEntryWrapper;
-            TraitBuilder::collecting_entries::<$type, Wrapper>()
+            traitcast_core::inventory::EntryBuilder::inserting_entry(
+                traitcast_core::impl_entry!($target, $source))
         }
     };
 }
