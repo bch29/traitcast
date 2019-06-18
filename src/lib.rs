@@ -130,59 +130,23 @@ fn main() {
 
 */
 
-use std::any::Any;
+pub mod core;
+pub mod inventory;
 
-pub mod private;
 #[cfg(test)]
 pub mod tests;
 
-use private::get_impl_table;
+use crate::core::{Registry, ImplEntry};
+use std::any::Any;
 
-/// Subtraits of `TraitcastFrom` may be cast into `dyn Any`, and thus may be 
-/// cast into any other castable dynamic trait object, too. This is blanket 
-/// implemented for all sized types with static lifetimes.
-pub trait TraitcastFrom {
-    /// Cast to an immutable reference to a trait object.
-    fn as_any_ref(&self) -> &dyn Any;
+pub use crate::core::TraitcastFrom;
 
-    /// Cast to a mutable reference to a trait object.
-    fn as_any_mut(&mut self) -> &mut dyn Any;
-
-    /// Cast to a boxed reference to a trait object.
-    fn as_any_box(self: Box<Self>) -> Box<dyn Any>;
-
-    /// Get the trait object's dynamic type id.
-    fn type_id(&self) -> std::any::TypeId {
-        self.as_any_ref().type_id()
-    }
-}
-
-impl<T> TraitcastFrom for T where T: Sized + 'static {
-    fn as_any_ref(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn as_any_box(self: Box<Self>) -> Box<dyn Any> {
-        self
-    }
-}
-
-impl TraitcastFrom for dyn Any {
-    fn as_any_ref(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn as_any_box(self: Box<Self>) -> Box<dyn Any> {
-        self
-    }
+lazy_static::lazy_static! {
+    /// This is a global table of all the trait objects that can be cast into. 
+    /// Each entry is a CastIntoTrait, i.e. a table of the implementations of 
+    /// a castable trait.
+    static ref GLOBAL_REGISTRY: Registry =
+        crate::inventory::build_registry();
 }
 
 /// A convenience trait with a blanket implementation that adds methods to cast
@@ -245,21 +209,9 @@ pub fn cast_box<From, To>(x: Box<From>)
     where From: TraitcastFrom + ?Sized,
           To: TraitcastTo + ?Sized + 'static
 {
-    let trait_map = get_impl_table::<To>().expect(
-        "Calling cast_box to cast into an unregistered trait object");
-
-    let x = x.as_any_box();
-
-    // Must ensure we take the type id of what's in the box, not the type id of 
-    // the box itself.
-    let tid = (*x).type_id();
-
-    let s = match trait_map.map.get(&tid) {
-        Some(s) => s,
-        None => return Err(x)
-    };
-
-    (s.cast_box)(x)
+    GLOBAL_REGISTRY.cast_into::<To>()
+        .expect("Calling cast_box to cast into an unregistered trait object")
+        .from_box(x)
 }
 
 /// Tries to cast the given mutable reference to a dynamic trait object. This 
@@ -269,12 +221,9 @@ pub fn cast_mut<'a, From, To>(x: &'a mut From) -> Option<&'a mut To>
     where From: TraitcastFrom + ?Sized,
           To: TraitcastTo + ?Sized + 'static
 {
-    let trait_map = get_impl_table::<To>().expect(
-        "Calling cast_mut to cast into an unregistered trait object");
-    let x = (*x).as_any_mut();
-    let tid = (x as &dyn Any).type_id();
-    let s = trait_map.map.get(&tid)?;
-    (s.cast_mut)(x)
+    GLOBAL_REGISTRY.cast_into::<To>()
+        .expect("Calling cast_mut to cast into an unregistered trait object")
+        .from_mut(x)
 }
 
 /// Tries to cast the given reference to a dynamic trait object. This will
@@ -284,17 +233,16 @@ pub fn cast_ref<'a, From, To>(x: &'a From) -> Option<&'a To>
     where From: TraitcastFrom + ?Sized,
           To: TraitcastTo + ?Sized + 'static
 {
-    let trait_map = get_impl_table::<To>().expect(
-        "Calling cast_ref to cast into an unregistered trait object");
-    let x = (*x).as_any_ref();
-    let tid = x.type_id();
-    let s = trait_map.map.get(&tid)?;
-    (s.cast_ref)(x)
+    GLOBAL_REGISTRY.cast_into::<To>()
+        .expect("Calling cast_ref to cast into an unregistered trait object")
+        .from_ref(x)
 }
 
-/// Trait objects that can be cast into implement this trait.
-pub unsafe trait TraitcastTo {
-    type ImplEntryWrapper: From<private::ImplEntry<Self>>;
+/// Trait objects that can be cast into implement this trait. Implementations
+/// are via the macro `traitcast_to_trait!`.
+pub trait TraitcastTo {
+    type ImplEntryWrapper: From<ImplEntry<Self>> + AsRef<ImplEntry<Self>> 
+        + ::inventory::Collect;
 }
 
 /// Register a trait to allow it to be cast into. Cannot cast from implementing 
@@ -304,38 +252,19 @@ pub unsafe trait TraitcastTo {
 #[macro_export]
 macro_rules! traitcast_to_trait {
     ($trait:ident, $wrapper:ident) => {
-
-        #[allow(non_camel_case_types)]
-        pub struct $wrapper(pub $crate::private::ImplEntry<dyn $trait>);
-
+        $crate::impl_entry_wrapper!($trait, $wrapper);
         inventory::collect!($wrapper);
 
-        impl std::convert::From<$crate::private::ImplEntry<dyn $trait>> 
-            for $wrapper 
-        {
-            fn from(x: $crate::private::ImplEntry<dyn $trait>) -> Self {
-                $wrapper(x)
-            }
-        }
-
-        unsafe impl $crate::TraitcastTo for dyn $trait {
+        impl $crate::TraitcastTo for dyn $trait {
             type ImplEntryWrapper = $wrapper;
         }
 
         inventory::submit! {
-            $crate::private::TraitEntryBuilder {
-                insert: |master| {
-                    master.insert::<$crate::private::TraitImplTable<dyn $trait>>(
-                        $crate::private::TraitImplTable {
-                            map: inventory::iter::<$wrapper>
-                                .into_iter()
-                                .map(|x| (x.0.tid, &x.0))
-                                .collect()
-                        });
-                }
-            }
+            use $crate::inventory::TraitBuilder;
+            type Wrapper = <dyn $trait as $crate::TraitcastTo>
+                ::ImplEntryWrapper;
+            TraitBuilder::collecting_entries::<dyn $trait, Wrapper>()
         }
-
     }
 }
 
@@ -351,26 +280,9 @@ macro_rules! traitcast_to_trait {
 macro_rules! traitcast_to_impl {
     ($trait:ident, $struct:ident) => {
         inventory::submit! {
-            let imp = $crate::private::ImplEntry::<dyn $trait> {
-                cast_box: |x| {
-                    let x: Box<$struct> = x.downcast()?;
-                    let x: Box<dyn $trait> = x;
-                    Ok(x)
-                },
-                cast_mut: |x| {
-                    let x: &mut $struct = x.downcast_mut()?;
-                    let x: &mut dyn $trait = x;
-                    Some(x)
-                },
-                cast_ref: |x| {
-                    let x: &$struct = x.downcast_ref()?;
-                    let x: &dyn $trait = x;
-                    Some(x)
-                },
-                tid: std::any::TypeId::of::<$struct>()
-            };
-            type IEW = <dyn $trait as $crate::TraitcastTo>::ImplEntryWrapper;
-            IEW::from(imp)
+            type Wrapper = <dyn $trait as $crate::TraitcastTo>
+                ::ImplEntryWrapper;
+            Wrapper::from($crate::impl_entry!($trait, $struct))
         }
     }
 }
