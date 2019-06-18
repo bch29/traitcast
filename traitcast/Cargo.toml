@@ -1,0 +1,17 @@
+[package]
+name = "traitcast"
+version = "0.2.1"
+authors = ["Bradley Hardy <bradleyhardy29@gmail.com>"]
+edition = "2018"
+license = "MIT"
+description = "Cast between dynamic trait objects."
+repository = "https://github.com/bch29/traitcast"
+
+[dependencies]
+lazy_static = "1.*"
+inventory = "0.1.*"
+
+[dependencies.traitcast_core]
+version = "0.2.*"
+path = "../core"
+features = ["use_inventory"]

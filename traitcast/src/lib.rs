@@ -2,7 +2,7 @@
 
 ## Casting from `Any`
 
-In the standard library, the std::any::Any trait comes with downcast methods 
+In the standard library, the std::any::Any trait comes with downcast methods
 which let you cast from an `Any` trait object to a concrete type.
 
 ```rust
@@ -47,14 +47,14 @@ This library provides a way of casting between different trait objects.
 ```rust
 use traitcast::{TraitcastFrom, TraitcastTo, Traitcast};
 
-// Extending `TraitcastFrom` is optional. This allows `Foo` objects themselves 
-// to be cast to other trait objects. If you do not extend `TraitcastFrom`, 
+// Extending `TraitcastFrom` is optional. This allows `Foo` objects themselves
+// to be cast to other trait objects. If you do not extend `TraitcastFrom`,
 // then Foo may only be cast into, not out of.
 trait Foo: TraitcastFrom {
-    fn foo(&self) -> i32; 
+    fn foo(&self) -> i32;
 }
 
-// Invoking `traitcast_to_trait!` implements TraitcastTo for this Foo, allowing 
+// Invoking `traitcast_to_trait!` implements TraitcastTo for this Foo, allowing
 // other trait objects to be cast into Foo trait objects.
 traitcast::traitcast_to_trait!(Foo, Foo_Traitcast);
 
@@ -65,15 +65,15 @@ trait Bar: TraitcastFrom {
 traitcast::traitcast_to_trait!(Bar, Bar_Traitcast);
 
 struct A {
-    x: i32 
+    x: i32
 }
 
-// No implementation of TraitcastFrom is necessary, because it is covered by 
+// No implementation of TraitcastFrom is necessary, because it is covered by
 // the blanket impl for any sized type with a static lifetime.
 impl Foo for A {
     fn foo(&self) -> i32 {
-        self.x 
-    } 
+        self.x
+    }
 }
 
 impl Bar for A {
@@ -100,8 +100,8 @@ fn main() {
 
     {
         let x: &dyn Bar = &x;
-        // Cast an immutable reference using the `cast_ref` method (via the 
-        // `Traitcast` trait, which is blanket implemented for all pairs of 
+        // Cast an immutable reference using the `cast_ref` method (via the
+        // `Traitcast` trait, which is blanket implemented for all pairs of
         // traits that may be cast between).
         let x: &dyn Foo = x.cast_ref().unwrap();
         assert_eq!(x.foo(), 7);
@@ -113,7 +113,7 @@ fn main() {
 
     {
         let x: &mut dyn Foo = &mut x;
-        // Cast a mutable reference using the `cast_mut` method 
+        // Cast a mutable reference using the `cast_mut` method
         let x: &mut dyn Bar = x.cast_mut().unwrap();
         assert_eq!(x.bar(), 14);
     }
@@ -130,23 +130,30 @@ fn main() {
 
 */
 
-pub mod core;
-pub mod inventory;
-
 #[cfg(test)]
 pub mod tests;
 
-use crate::core::{Registry, ImplEntry};
 use std::any::Any;
 
-pub use crate::core::TraitcastFrom;
+/// Macro implementation details. If you want to use these directly, it is best
+/// to use the `traitcast_core` crate instead.
+pub mod private {
+    pub use traitcast_core::{CastIntoTrait, ImplEntry, TraitcastFrom};
+
+    pub use traitcast_core::inventory::TraitBuilder;
+}
+
+use crate::private::ImplEntry;
+pub use crate::private::TraitcastFrom;
+use traitcast_core::inventory::build_registry;
+use traitcast_core::Registry;
 
 lazy_static::lazy_static! {
-    /// This is a global table of all the trait objects that can be cast into. 
-    /// Each entry is a CastIntoTrait, i.e. a table of the implementations of 
+    /// This is a global table of all the trait objects that can be cast into.
+    /// Each entry is a CastIntoTrait, i.e. a table of the implementations of
     /// a castable trait.
     static ref GLOBAL_REGISTRY: Registry =
-        crate::inventory::build_registry();
+        build_registry();
 }
 
 /// A convenience trait with a blanket implementation that adds methods to cast
@@ -164,12 +171,13 @@ pub trait Traitcast<To: ?Sized> {
 }
 
 impl<From, To> Traitcast<To> for From
-    where From: TraitcastFrom + ?Sized,
-          To: TraitcastTo + ?Sized + 'static
+where
+    From: TraitcastFrom + ?Sized,
+    To: TraitcastTo + ?Sized + 'static,
 {
     /// Tries to cast self to a different dynamic trait object. This will
-    /// always return None if the implementation of the target trait, for the 
-    /// concrete type of self, has not been registered via 
+    /// always return None if the implementation of the target trait, for the
+    /// concrete type of self, has not been registered via
     /// `traitcast_to_impl!`.
     fn cast_ref(&self) -> Option<&To> {
         cast_ref(self)
@@ -177,14 +185,14 @@ impl<From, To> Traitcast<To> for From
 
     /// Tries to cast the self to a different dynamic trait object.  This will
     /// always return None if the implementation of the target trait, for the
-    /// concrete type of self, has not been registered via 
+    /// concrete type of self, has not been registered via
     /// `traitcast_to_impl!`.
     fn cast_mut(&mut self) -> Option<&mut To> {
         cast_mut(self)
     }
 
-    /// Tries to cast self to a boxed dynamic trait object. This will always 
-    /// return Err if the implementation of the target trait, for the concrete 
+    /// Tries to cast self to a boxed dynamic trait object. This will always
+    /// return Err if the implementation of the target trait, for the concrete
     /// type of self, has not been registered via `traitcast_to_impl!`.
     fn cast_box(self: Box<Self>) -> Result<Box<To>, Box<dyn Any>> {
         cast_box(self)
@@ -195,45 +203,51 @@ impl<From, To> Traitcast<To> for From
 /// always return `false` if the implementation of the target trait, for the
 /// concrete type of x, has not been registered via `traitcast_to_impl!`.
 pub fn implements_trait<From, To>(x: &From) -> bool
-    where From: TraitcastFrom + ?Sized,
-          To: TraitcastTo + ?Sized + 'static
+where
+    From: TraitcastFrom + ?Sized,
+    To: TraitcastTo + ?Sized + 'static,
 {
     cast_ref::<From, To>(x).is_some()
 }
 
 /// Tries to cast the given pointer to a dynamic trait object. This will always
-/// return Err if the implementation of the target trait, for the concrete type 
+/// return Err if the implementation of the target trait, for the concrete type
 /// of x, has not been registered via `traitcast_to_impl!`.
-pub fn cast_box<From, To>(x: Box<From>) 
-    -> Result<Box<To>, Box<dyn Any>>
-    where From: TraitcastFrom + ?Sized,
-          To: TraitcastTo + ?Sized + 'static
+pub fn cast_box<From, To>(x: Box<From>) -> Result<Box<To>, Box<dyn Any>>
+where
+    From: TraitcastFrom + ?Sized,
+    To: TraitcastTo + ?Sized + 'static,
 {
-    GLOBAL_REGISTRY.cast_into::<To>()
+    GLOBAL_REGISTRY
+        .cast_into::<To>()
         .expect("Calling cast_box to cast into an unregistered trait object")
         .from_box(x)
 }
 
-/// Tries to cast the given mutable reference to a dynamic trait object. This 
-/// will always return None if the implementation of the target trait, for the 
+/// Tries to cast the given mutable reference to a dynamic trait object. This
+/// will always return None if the implementation of the target trait, for the
 /// concrete type of x, has not been registered via `traitcast_to_impl!`.
-pub fn cast_mut<'a, From, To>(x: &'a mut From) -> Option<&'a mut To> 
-    where From: TraitcastFrom + ?Sized,
-          To: TraitcastTo + ?Sized + 'static
+pub fn cast_mut<'a, From, To>(x: &'a mut From) -> Option<&'a mut To>
+where
+    From: TraitcastFrom + ?Sized,
+    To: TraitcastTo + ?Sized + 'static,
 {
-    GLOBAL_REGISTRY.cast_into::<To>()
+    GLOBAL_REGISTRY
+        .cast_into::<To>()
         .expect("Calling cast_mut to cast into an unregistered trait object")
         .from_mut(x)
 }
 
 /// Tries to cast the given reference to a dynamic trait object. This will
-/// always return None if the implementation of the target trait, for the 
+/// always return None if the implementation of the target trait, for the
 /// concrete type of x, has not been registered via `traitcast_to_impl!`.
-pub fn cast_ref<'a, From, To>(x: &'a From) -> Option<&'a To> 
-    where From: TraitcastFrom + ?Sized,
-          To: TraitcastTo + ?Sized + 'static
+pub fn cast_ref<'a, From, To>(x: &'a From) -> Option<&'a To>
+where
+    From: TraitcastFrom + ?Sized,
+    To: TraitcastTo + ?Sized + 'static,
 {
-    GLOBAL_REGISTRY.cast_into::<To>()
+    GLOBAL_REGISTRY
+        .cast_into::<To>()
         .expect("Calling cast_ref to cast into an unregistered trait object")
         .from_ref(x)
 }
@@ -241,18 +255,19 @@ pub fn cast_ref<'a, From, To>(x: &'a From) -> Option<&'a To>
 /// Trait objects that can be cast into implement this trait. Implementations
 /// are via the macro `traitcast_to_trait!`.
 pub trait TraitcastTo {
-    type ImplEntryWrapper: From<ImplEntry<Self>> + AsRef<ImplEntry<Self>> 
+    type ImplEntryWrapper: From<ImplEntry<Self>>
+        + AsRef<ImplEntry<Self>>
         + ::inventory::Collect;
 }
 
-/// Register a trait to allow it to be cast into. Cannot cast from implementing 
+/// Register a trait to allow it to be cast into. Cannot cast from implementing
 /// structs unless `traitcast_to_impl!` is also invoked for that struct.
 ///
 /// This macro may only be used on traits defined in the same module.
 #[macro_export]
 macro_rules! traitcast_to_trait {
     ($trait:ident, $wrapper:ident) => {
-        $crate::impl_entry_wrapper!($trait, $wrapper);
+        traitcast_core::defn_impl_entry_wrapper!($trait, $wrapper);
         inventory::collect!($wrapper);
 
         impl $crate::TraitcastTo for dyn $trait {
@@ -260,19 +275,19 @@ macro_rules! traitcast_to_trait {
         }
 
         inventory::submit! {
-            use $crate::inventory::TraitBuilder;
+            use $crate::private::TraitBuilder;
             type Wrapper = <dyn $trait as $crate::TraitcastTo>
                 ::ImplEntryWrapper;
             TraitBuilder::collecting_entries::<dyn $trait, Wrapper>()
         }
-    }
+    };
 }
 
-/// Register an implementation of a castable trait for a particular struct. The 
+/// Register an implementation of a castable trait for a particular struct. The
 /// struct must implement the trait. This enables objects of this type to be
 /// cast into dynamic trait references of this trait, via an Any pointer.
-/// It is best not to invoke traitcast_to_impl! multiple times for the same 
-/// implementation. This will have no effect but to slightly slow down program 
+/// It is best not to invoke traitcast_to_impl! multiple times for the same
+/// implementation. This will have no effect but to slightly slow down program
 /// load time.
 ///
 /// This macro should only be used on structs defined in the same module.
@@ -282,7 +297,7 @@ macro_rules! traitcast_to_impl {
         inventory::submit! {
             type Wrapper = <dyn $trait as $crate::TraitcastTo>
                 ::ImplEntryWrapper;
-            Wrapper::from($crate::impl_entry!($trait, $struct))
+            Wrapper::from(traitcast_core::impl_entry!($trait, $struct))
         }
-    }
+    };
 }

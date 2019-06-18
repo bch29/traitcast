@@ -21,13 +21,13 @@ mod traits {
 }
 
 mod structs {
-    use crate::tests::traits::{Foo, Bar, Baz};
+    use crate::tests::traits::{Bar, Baz, Foo};
     pub struct A {
-        pub x: i64
+        pub x: i64,
     }
 
     pub struct B {
-        pub y: i64
+        pub y: i64,
     }
 
     impl Foo for A {
@@ -62,8 +62,8 @@ mod structs {
     crate::traitcast_to_impl!(Baz, B);
 }
 
-use traits::*;
 use structs::*;
+use traits::*;
 
 use crate::Traitcast;
 
