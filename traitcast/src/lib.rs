@@ -129,6 +129,7 @@ pub mod tests;
 use std::any::Any;
 
 pub use traitcast_core::TraitcastFrom;
+pub use traitcast_core::traitcast;
 use traitcast_core::inventory::build_registry;
 use traitcast_core::Registry;
 
@@ -234,34 +235,4 @@ where
         .cast_into::<To>()
         .expect("Calling cast_ref to cast into an unregistered trait object")
         .from_ref(x)
-}
-
-/// `traitcast!(struct Bar)` registers a struct to allow it to be cast into.
-///
-/// `traitcast!(impl Foo for Bar)` allows casting into dynamic `Foo` trait 
-/// objects, from objects whose concrete type is `Bar`.
-///
-/// `traitcast!(struct Bar: Foo1, Foo2)` registers a struct to allow it to be 
-/// cast into, and further allows casting into dynamic `Foo1` or `Foo2` trait
-/// objects, from objects whose concrete type is `Bar`.
-#[macro_export]
-macro_rules! traitcast {
-    (struct $type:ty) => {
-        $crate::traitcast!($type => $type);
-    };
-    (struct $type:ty : $($trait:ident),+) => {
-        $crate::traitcast!(struct $type);
-        $(
-            $crate::traitcast!(impl $trait for $type);
-        )+
-    };
-    (impl $trait:ident for $source:ty) => {
-        $crate::traitcast!($source => dyn $trait);
-    };
-    ($source:ty => $target:ty) => {
-        inventory::submit! {
-            traitcast_core::inventory::EntryBuilder::inserting_entry(
-                traitcast_core::impl_entry!($target, $source))
-        }
-    };
 }

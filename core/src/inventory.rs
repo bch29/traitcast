@@ -63,3 +63,37 @@ impl EntryBuilder {
 }
 
 inventory::collect!(EntryBuilder);
+
+/// Macro for registering traitcast entries with inventory. Requires the
+/// "use_inventory" feature.
+///
+/// `traitcast!(struct Bar)` registers a struct to allow it to be cast into.
+///
+/// `traitcast!(impl Foo for Bar)` allows casting into dynamic `Foo` trait 
+/// objects, from objects whose concrete type is `Bar`.
+///
+/// `traitcast!(struct Bar: Foo1, Foo2)` registers a struct to allow it to be 
+/// cast into, and further allows casting into dynamic `Foo1` or `Foo2` trait
+/// objects, from objects whose concrete type is `Bar`.
+#[cfg(feature = "use_inventory")]
+#[macro_export]
+macro_rules! traitcast {
+    (struct $type:ty) => {
+        $crate::traitcast!($type => $type);
+    };
+    (struct $type:ty : $($trait:ident),+) => {
+        $crate::traitcast!(struct $type);
+        $(
+            $crate::traitcast!(impl $trait for $type);
+        )+
+    };
+    (impl $trait:ident for $source:ty) => {
+        $crate::traitcast!($source => dyn $trait);
+    };
+    ($source:ty => $target:ty) => {
+        inventory::submit! {
+            $crate::inventory::EntryBuilder::inserting_entry(
+                $crate::impl_entry!($target, $source))
+        }
+    };
+}
