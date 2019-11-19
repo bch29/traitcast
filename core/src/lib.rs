@@ -137,7 +137,7 @@ impl<To: ?Sized + 'static> CastIntoTrait<To> {
 /// An entry in the table for a particular castable trait. Stores methods to
 /// cast into one particular struct that implements the trait.
 pub struct ImplEntry<DynTrait: ?Sized> {
-    pub cast_box: fn(Box<Any>) -> Result<Box<DynTrait>, Box<Any>>,
+    pub cast_box: fn(Box<dyn Any>) -> Result<Box<DynTrait>, Box<dyn Any>>,
     pub cast_mut: fn(&mut dyn Any) -> Option<&mut DynTrait>,
     pub cast_ref: fn(&dyn Any) -> Option<&DynTrait>,
     pub tid: TypeId,

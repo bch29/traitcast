@@ -65,8 +65,8 @@ use crate::Traitcast;
 
 #[test]
 fn test_traitcast() {
-    let mut x: Box<Any> = Box::new(A { x: 0 });
-    let mut y: Box<Any> = Box::new(B { y: 1 });
+    let mut x: Box<dyn Any> = Box::new(A { x: 0 });
+    let mut y: Box<dyn Any> = Box::new(B { y: 1 });
 
     {
         // Can cast from Any to Bar

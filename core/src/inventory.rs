@@ -17,7 +17,7 @@ pub fn build_registry() -> Registry {
 /// This is instantiated once for each castable trait. It describes how a trait
 /// can insert itself into the global table.
 pub struct EntryBuilder {
-    pub insert: Box<Fn(&mut Registry)>,
+    pub insert: Box<dyn Fn(&mut Registry)>,
 }
 
 impl EntryBuilder {
