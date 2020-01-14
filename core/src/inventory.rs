@@ -3,6 +3,7 @@ This module defines helper types for using `traitcast` along with the
 `inventory` crate. Requires the `use_inventory` feature.
 */
 use crate::{CastIntoTrait, ImplEntry, Registry};
+use alloc::boxed::Box;
 
 /// Makes a trait registry by collecting EntryBuilders with the `inventory`
 /// crate.
@@ -28,7 +29,7 @@ impl EntryBuilder {
         Entry: inventory::Collect + AsRef<ImplEntry<To>>,
         To: 'static + ?Sized,
     {
-        use std::iter::FromIterator;
+        use core::iter::FromIterator;
         EntryBuilder {
             insert: Box::new(|master| {
                 master.insert(CastIntoTrait::from_iter(
