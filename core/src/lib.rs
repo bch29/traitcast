@@ -4,6 +4,9 @@ global registry. This makes it more flexible at the cost of having to create
 a registry and pass it around. If you do not want to do that, use the root
 `traitcast` module which provides a convenient global registry.
 */
+#![no_std]
+
+extern crate alloc;
 
 #[cfg(feature = "use_inventory")]
 pub mod inventory;
@@ -11,8 +14,9 @@ pub mod inventory;
 // #[cfg(test)]
 // pub mod tests;
 
-use std::any::{Any, TypeId};
-use std::collections::HashMap;
+use alloc::boxed::Box;
+use core::any::{Any, TypeId};
+use hashbrown::HashMap;
 
 /// A registry defining how to cast into some set of traits.
 pub struct Registry {
@@ -71,7 +75,7 @@ impl<DynTrait: ?Sized> CastIntoTrait<DynTrait> {
     }
 }
 
-impl<DynTrait: ?Sized> std::iter::FromIterator<ImplEntry<DynTrait>>
+impl<DynTrait: ?Sized> core::iter::FromIterator<ImplEntry<DynTrait>>
     for CastIntoTrait<DynTrait>
 {
     fn from_iter<T>(iter: T) -> Self
@@ -173,7 +177,7 @@ pub trait TraitcastFrom {
     fn as_any_box(self: Box<Self>) -> Box<dyn Any>;
 
     /// Get the trait object's dynamic type id.
-    fn type_id(&self) -> std::any::TypeId {
+    fn type_id(&self) -> core::any::TypeId {
         self.as_any_ref().type_id()
     }
 }
